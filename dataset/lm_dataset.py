@@ -134,46 +134,58 @@ class DPODataset(Dataset):
 
     def __getitem__(self, index):
         sample = self.samples[index]
-        chosen = sample['chosen']  # 是一个 list，里面包含若干 {role, content}
-        rejected = sample['rejected']  # 同上
-        chosen_prompt = self.tokenizer.apply_chat_template(
-            chosen, tokenize=False, add_generation_prompt=False
-        )
-        chosen_prompt = post_processing_chat(chosen_prompt)
-
-        rejected_prompt = self.tokenizer.apply_chat_template(
-            rejected, tokenize=False, add_generation_prompt=False
-        )
-        rejected_prompt = post_processing_chat(rejected_prompt)
-        chosen_encoding = self.tokenizer(
-            chosen_prompt, truncation=True, max_length=self.max_length, padding='max_length'
-        )
-        rejected_encoding = self.tokenizer(
-            rejected_prompt, truncation=True, max_length=self.max_length, padding='max_length'
-        )
-
-        chosen_input_ids = chosen_encoding['input_ids']
-        chosen_loss_mask = self.generate_loss_mask(chosen_input_ids)
-
-        rejected_input_ids = rejected_encoding['input_ids']
-        rejected_loss_mask = self.generate_loss_mask(rejected_input_ids)
-        x_chosen = torch.tensor(chosen_input_ids[:-1], dtype=torch.long)
-        y_chosen = torch.tensor(chosen_input_ids[1:], dtype=torch.long)
-        mask_chosen = torch.tensor(chosen_loss_mask[1:], dtype=torch.long)
-        x_rejected = torch.tensor(rejected_input_ids[:-1], dtype=torch.long)
-        y_rejected = torch.tensor(rejected_input_ids[1:], dtype=torch.long)
-        mask_rejected = torch.tensor(rejected_loss_mask[1:], dtype=torch.long)
+        chosen_input_ids, chosen_labels = self.encode_pair(sample, 'chosen')
+        rejected_input_ids, rejected_labels = self.encode_pair(sample, 'rejected')
 
         return {
-            'x_chosen': x_chosen,
-            'y_chosen': y_chosen,
-            'mask_chosen': mask_chosen,
-            'x_rejected': x_rejected,
-            'y_rejected': y_rejected,
-            'mask_rejected': mask_rejected
+            'chosen_input_ids': torch.tensor(chosen_input_ids, dtype=torch.long),
+            'chosen_labels': torch.tensor(chosen_labels, dtype=torch.long),
+            'rejected_input_ids': torch.tensor(rejected_input_ids, dtype=torch.long),
+            'rejected_labels': torch.tensor(rejected_labels, dtype=torch.long),
         }
 
-    def generate_loss_mask(self, input_ids):
+    def encode_pair(self, sample, key):
+        messages = self.build_messages(sample, key)
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=False
+        )
+        prompt = post_processing_chat(prompt)
+        encoding = self.tokenizer(
+            prompt,
+            truncation=True,
+            max_length=self.max_length,
+            padding='max_length'
+        )
+        input_ids = encoding['input_ids']
+        labels = self.generate_labels(input_ids)
+        return input_ids, labels
+
+    def build_messages(self, sample, key):
+        value = sample[key]
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+            prompt_messages = []
+            conversations = sample.get('conversations')
+            if conversations:
+                prompt_messages = [dict(msg) for msg in conversations if msg.get('role') != 'assistant']
+            elif sample.get('prompt'):
+                prompt_messages = [{'role': 'user', 'content': sample['prompt']}]
+            elif sample.get('question'):
+                prompt_messages = [{'role': 'user', 'content': sample['question']}]
+
+            return prompt_messages + [{'role': 'assistant', 'content': value}]
+
+        return [dict(msg) for msg in value]
+
+    def generate_labels(self, input_ids):
         loss_mask = [0] * len(input_ids)
         i = 0
         while i < len(input_ids):
@@ -189,7 +201,10 @@ class DPODataset(Dataset):
                 i = end + len(self.eos_id) if end < len(input_ids) else len(input_ids)
             else:
                 i += 1
-        return loss_mask
+        return [
+            token_id if mask and token_id != self.padding else -100
+            for token_id, mask in zip(input_ids, loss_mask)
+        ]
 
 
 class RLAIFDataset(Dataset):

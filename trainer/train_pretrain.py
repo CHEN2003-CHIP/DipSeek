@@ -128,7 +128,7 @@ if __name__ == "__main__":
                                num_hidden_layers=args.num_hidden_layers, 
                                use_moe=bool(args.use_moe),
                                use_residual_scale=bool(args.use_residual_scale),
-                               use_residual_scale_init=args.residual_scale_init,
+                               residual_scale_init=args.residual_scale_init,
                                mtp_depth=args.mtp_depth,
                                mtp_loss_weight=args.mtp_loss_weight)
     ckp_data = lm_checkpoint(lm_config, weight=args.save_weight, save_dir='../checkpoints') if args.from_resume==1 else None

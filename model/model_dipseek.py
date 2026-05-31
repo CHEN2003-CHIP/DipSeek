@@ -280,7 +280,7 @@ class MTPLiteHead(nn.Module):
     2. 和 DeepSeek-V3 的 shared output head 思路一致
     3. 推理时可以完全不用这个模块
     """
-    def __init__(self, config: MiniMindConfig):
+    def __init__(self, config: DipSeekConfig):
         super().__init__()
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.proj = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
@@ -309,7 +309,7 @@ class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
         if self.config.tie_word_embeddings: self.model.embed_tokens.weight = self.lm_head.weight
         self.post_init()
 
-        def _compute_mtp_loss(self, hidden_states, labels):
+    def _compute_mtp_loss(self, hidden_states, labels):
             """
             MTP-lite loss。
 
@@ -355,7 +355,7 @@ class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
             if not mtp_losses:
                 return hidden_states.new_zeros(())
 
-            return torch.stack(mtp_losses).mean()
+            return torch.stack(mtp_losses).mean()  
 
     def forward(self, input_ids, attention_mask=None, past_key_values=None, use_cache=False, logits_to_keep=0, labels=None, **kwargs):
         hidden_states, past_key_values, aux_loss = self.model(input_ids, attention_mask, past_key_values, use_cache, **kwargs)

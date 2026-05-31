@@ -32,12 +32,13 @@ def apply_lora(
         for p in model.parameters():
             p.requires_grad = False
 
-    for name, module in model.named_modules():
-        if not isinstance(module, nn.Linear):
-            continue
+    target_linear_modules = [
+        (name, module)
+        for name, module in model.named_modules()
+        if isinstance(module, nn.Linear) and any(target in name for target in target_modules)
+    ]
 
-        if not any(target in name for target in target_modules):
-            continue
+    for name, module in target_linear_modules:
 
         lora = LoRA(
             in_features=module.in_features,

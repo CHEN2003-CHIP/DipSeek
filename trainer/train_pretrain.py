@@ -65,7 +65,12 @@ def train_epoch(epoch, loader, iters, start_step=0, wandb=None):
             raw_model = model.module if isinstance(model, DistributedDataParallel) else model
             raw_model = getattr(raw_model, '_orig_mod', raw_model)
             state_dict = raw_model.state_dict()
-            torch.save({k: v.half().cpu() for k, v in state_dict.items()}, ckp)
+            state_dict = {
+               k: v.half().cpu()
+               for k, v in state_dict.items()
+               if not k.startswith("mtp_heads.")
+            }
+            torch.save(state_dict, ckp)
             lm_checkpoint(lm_config, weight=args.save_weight, model=model, optimizer=optimizer, scaler=scaler, epoch=epoch, step=step, wandb=wandb, save_dir='../checkpoints')
             model.train()
             del state_dict
@@ -98,6 +103,10 @@ if __name__ == "__main__":
     parser.add_argument('--num_hidden_layers', default=8, type=int, help="隐藏层数量")
     parser.add_argument('--max_seq_len', default=340, type=int, help="训练的最大截断长度（中文1token≈1.5~1.7字符）")
     parser.add_argument('--use_moe', default=0, type=int, choices=[0, 1], help="是否使用MoE架构（0=否，1=是）")
+    
+    parser.add_argument('--mtp_depth', default=0, type=int, help="MTP-lite深度，0=关闭，1=额外预测t+2")
+    parser.add_argument('--mtp_loss_weight', default=0.0, type=float, help="MTP-lite loss权重，建议0.05或0.1")
+    
     parser.add_argument('--use_residual_scale', default=0, type=int, choices=[0, 1], help="是否启用Residual Scale（0=否，1=是）")
     parser.add_argument('--residual_scale_init', default=1.0, type=float, help="Residual Scale初始值")
     parser.add_argument("--data_path", type=str, default="../dataset/pretrain_t2t_mini.jsonl", help="预训练数据路径")
@@ -119,7 +128,9 @@ if __name__ == "__main__":
                                num_hidden_layers=args.num_hidden_layers, 
                                use_moe=bool(args.use_moe),
                                use_residual_scale=bool(args.use_residual_scale),
-                               use_residual_scale_init=args.residual_scale_init)
+                               use_residual_scale_init=args.residual_scale_init,
+                               mtp_depth=args.mtp_depth,
+                               mtp_loss_weight=args.mtp_loss_weight)
     ckp_data = lm_checkpoint(lm_config, weight=args.save_weight, save_dir='../checkpoints') if args.from_resume==1 else None
     
     # ========== 3. 设置混合精度 ==========

@@ -42,6 +42,11 @@ class DipSeekConfig(PretrainedConfig):
         self.router_aux_loss_coef = kwargs.get("router_aux_loss_coef", 5e-4)
         self.use_residual_scale = kwargs.get("use_residual_scale", False)
         self.residual_scale_init = kwargs.get("residual_scale_init", 1.0)
+        # MTP-lite configs
+        # mtp_depth=0: 关闭 MTP
+        # mtp_depth=1: 额外预测一个未来 token，也就是 t+2
+        self.mtp_depth = kwargs.get("mtp_depth", 0)
+        self.mtp_loss_weight = kwargs.get("mtp_loss_weight", 0.0)
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-5):
@@ -260,6 +265,29 @@ class DipSeekModel(nn.Module):
         aux_loss = sum([l.mlp.aux_loss for l in self.layers if isinstance(l.mlp, MOEFeedForward)], hidden_states.new_zeros(1).squeeze())
         return hidden_states, presents, aux_loss
 
+#MTP Lite Head
+class MTPLiteHead(nn.Module):
+    """
+    轻量版 MTP Head。
+
+    作用：
+    - 输入主模型最后一层 hidden_states
+    - 经过一个 RMSNorm + Linear
+    - 再复用主模型 lm_head 去预测更远的未来 token
+
+    这里不单独创建 vocab head，目的是：
+    1. 参数少
+    2. 和 DeepSeek-V3 的 shared output head 思路一致
+    3. 推理时可以完全不用这个模块
+    """
+    def __init__(self, config: MiniMindConfig):
+        super().__init__()
+        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.proj = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
+
+    def forward(self, hidden_states):
+        return self.proj(self.norm(hidden_states))
+
 class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
     config_class = DipSeekConfig
     _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}
@@ -268,8 +296,66 @@ class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
         super().__init__(self.config)
         self.model = DipSeekModel(self.config)
         self.lm_head = nn.Linear(self.config.hidden_size, self.config.vocab_size, bias=False)
+        
+        # MTP-lite heads
+        # mtp_depth=1 时，只创建 1 个 head，用来预测 t+2
+        if self.config.mtp_depth > 0:
+            self.mtp_heads = nn.ModuleList([
+                MTPLiteHead(self.config) for _ in range(self.config.mtp_depth)
+            ])
+        else:
+            self.mtp_heads = None
+        
         if self.config.tie_word_embeddings: self.model.embed_tokens.weight = self.lm_head.weight
         self.post_init()
+
+        def _compute_mtp_loss(self, hidden_states, labels):
+            """
+            MTP-lite loss。
+
+            主 loss:
+                hidden_states[:, t] -> labels[:, t+1]
+
+            MTP-lite depth=1:
+                hidden_states[:, t] -> labels[:, t+2]
+
+            如果 mtp_depth=2:
+                第一个 head 预测 t+2
+                第二个 head 预测 t+3
+
+            注意：
+            - 这里复用 self.lm_head，不额外创建 vocab projection
+            - labels 里的 -100 会被 ignore_index 忽略
+            """
+            if self.mtp_heads is None:
+                return hidden_states.new_zeros(())
+
+            mtp_losses = []
+            vocab_size = self.config.vocab_size
+            seq_len = hidden_states.size(1)
+
+            for offset, mtp_head in enumerate(self.mtp_heads, start=2):
+                # offset=2 表示用位置 t 的 hidden 预测 t+2
+                # 序列长度太短时跳过
+                if seq_len <= offset:
+                    continue
+
+                mtp_hidden = mtp_head(hidden_states[:, :-offset, :])
+                mtp_logits = self.lm_head(mtp_hidden)
+
+                mtp_labels = labels[:, offset:].contiguous()
+
+                mtp_loss = F.cross_entropy(
+                    mtp_logits.reshape(-1, vocab_size),
+                    mtp_labels.reshape(-1),
+                    ignore_index=-100
+                )
+                mtp_losses.append(mtp_loss)
+
+            if not mtp_losses:
+                return hidden_states.new_zeros(())
+
+            return torch.stack(mtp_losses).mean()
 
     def forward(self, input_ids, attention_mask=None, past_key_values=None, use_cache=False, logits_to_keep=0, labels=None, **kwargs):
         hidden_states, past_key_values, aux_loss = self.model(input_ids, attention_mask, past_key_values, use_cache, **kwargs)
@@ -279,6 +365,18 @@ class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
         if labels is not None:
             x, y = logits[..., :-1, :].contiguous(), labels[..., 1:].contiguous()
             loss = F.cross_entropy(x.view(-1, x.size(-1)), y.view(-1), ignore_index=-100)
+            # MTP-lite:
+            # 只在训练时启用，eval / generate 不启用
+            # 这样验证 loss 仍然是干净的 next-token loss
+            if (
+                self.training
+                and self.config.mtp_depth > 0
+                and self.config.mtp_loss_weight > 0
+                and isinstance(logits_to_keep, int)
+                and logits_to_keep == 0
+            ):
+                mtp_loss = self._compute_mtp_loss(hidden_states, labels)
+                loss = loss + self.config.mtp_loss_weight * mtp_loss
         return MoeCausalLMOutputWithPast(loss=loss, aux_loss=aux_loss, logits=logits, past_key_values=past_key_values, hidden_states=hidden_states)
     
     # Custom generation loop preserved from the upstream implementation.

@@ -35,7 +35,8 @@ def train_epoch(epoch, loader, iters, lora_params, start_step=0, wandb=None):
 
         with autocast_ctx:
             res = model(input_ids, labels=labels)
-            loss = res.loss + res.aux_loss
+            aux_loss = res.aux_loss if res.aux_loss is not None else 0.0
+            loss = res.loss + aux_loss
             loss = loss / args.accumulation_steps
 
         scaler.scale(loss).backward()
@@ -99,6 +100,14 @@ if __name__ == "__main__":
     parser.add_argument("--use_wandb", action="store_true", help="是否使用wandb")
     parser.add_argument("--wandb_project", type=str, default="DipSeek-LoRA", help="wandb项目名")
     parser.add_argument("--use_compile", default=0, type=int, choices=[0, 1], help="是否使用torch.compile加速（0=否，1=是）")
+    parser.add_argument('--lora_rank', type=int, default=8)
+    parser.add_argument('--lora_alpha', type=int, default=16)
+    parser.add_argument(
+        '--lora_target',
+        type=str,
+        default='q_proj,v_proj,k_proj,o_proj',
+        help='LoRA target modules, split by comma. Example: q_proj,v_proj or q_proj,k_proj,v_proj,o_proj'
+    )
     args = parser.parse_args()
 
     # ========== 1. 初始化环境和随机种子 ==========
@@ -127,7 +136,18 @@ if __name__ == "__main__":
     
     # ========== 5. 定义模型、应用LoRA、冻结非LoRA参数 ==========
     model, tokenizer = init_model(lm_config, args.from_weight, device=args.device)
-    apply_lora(model)
+    target_modules = tuple(
+        x.strip() for x in args.lora_target.split(',') if x.strip()
+    )
+
+    apply_lora(
+        model,
+        rank=args.lora_rank,
+        alpha=args.lora_alpha,
+        target_modules=target_modules,
+        freeze_base=True,
+    )
+    #apply_lora(model)
     
     # 统计参数
     total_params = sum(p.numel() for p in model.parameters())

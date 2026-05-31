@@ -7,4 +7,5 @@ docs-dipseek/
 checkpoints
 dataset/*.jsonl
 LICENSE
+fromAutoDL
 

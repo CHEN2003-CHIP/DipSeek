@@ -186,25 +186,30 @@ class DPODataset(Dataset):
         return [dict(msg) for msg in value]
 
     def generate_labels(self, input_ids):
-        loss_mask = [0] * len(input_ids)
+        labels = [-100] * len(input_ids)
+    
         i = 0
         while i < len(input_ids):
             if input_ids[i:i + len(self.bos_id)] == self.bos_id:
                 start = i + len(self.bos_id)
                 end = start
+    
                 while end < len(input_ids):
                     if input_ids[end:end + len(self.eos_id)] == self.eos_id:
                         break
                     end += 1
-                for j in range(start, min(end + len(self.eos_id), self.max_length)):
-                    loss_mask[j] = 1
+    
+                label_end = min(end + len(self.eos_id), self.max_length)
+    
+                for j in range(start, label_end):
+                    if input_ids[j] != self.padding:
+                        labels[j] = input_ids[j]
+    
                 i = end + len(self.eos_id) if end < len(input_ids) else len(input_ids)
             else:
                 i += 1
-        return [
-            token_id if mask and token_id != self.padding else -100
-            for token_id, mask in zip(input_ids, loss_mask)
-        ]
+    
+        return labels
 
 
 class RLAIFDataset(Dataset):

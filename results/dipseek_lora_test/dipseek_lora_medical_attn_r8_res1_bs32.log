@@ -1,0 +1,87 @@
+/root/autodl-tmp/conda_envs/dipseek/lib/python3.10/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+LoRA config: from_weight=dipseek_sft_from_mtp_bs32, lora_name=dipseek_lora_medical_attn_r8_res1_bs32, use_residual_scale=True, residual_scale_init=1.0, mtp_depth=0, mtp_loss_weight=0.0, lora_rank=8, lora_alpha=16, lora_target=q_proj,k_proj,v_proj,o_proj
+Model Params: 63.92M
+Trainable Params: 63.924M
+LLM 总参数量: 64.269 M
+LoRA 参数量: 0.344 M
+LoRA 参数占比: 0.54%
+Epoch:[1/1](10/790), loss: 1.7914, logits_loss: 1.7914, aux_loss: 0.0000, lr: 0.00004998, epoch_time: 3.0min
+Epoch:[1/1](20/790), loss: 1.7568, logits_loss: 1.7568, aux_loss: 0.0000, lr: 0.00004993, epoch_time: 3.0min
+Epoch:[1/1](30/790), loss: 1.8356, logits_loss: 1.8356, aux_loss: 0.0000, lr: 0.00004984, epoch_time: 2.0min
+Epoch:[1/1](40/790), loss: 1.8404, logits_loss: 1.8404, aux_loss: 0.0000, lr: 0.00004972, epoch_time: 2.0min
+Epoch:[1/1](50/790), loss: 1.7876, logits_loss: 1.7876, aux_loss: 0.0000, lr: 0.00004956, epoch_time: 2.0min
+Epoch:[1/1](60/790), loss: 1.8518, logits_loss: 1.8518, aux_loss: 0.0000, lr: 0.00004936, epoch_time: 2.0min
+Epoch:[1/1](70/790), loss: 1.7725, logits_loss: 1.7725, aux_loss: 0.0000, lr: 0.00004913, epoch_time: 2.0min
+Epoch:[1/1](80/790), loss: 1.7640, logits_loss: 1.7640, aux_loss: 0.0000, lr: 0.00004887, epoch_time: 2.0min
+Epoch:[1/1](90/790), loss: 1.7705, logits_loss: 1.7705, aux_loss: 0.0000, lr: 0.00004857, epoch_time: 2.0min
+Epoch:[1/1](100/790), loss: 1.8029, logits_loss: 1.8029, aux_loss: 0.0000, lr: 0.00004824, epoch_time: 2.0min
+Epoch:[1/1](110/790), loss: 1.7648, logits_loss: 1.7648, aux_loss: 0.0000, lr: 0.00004788, epoch_time: 2.0min
+Epoch:[1/1](120/790), loss: 1.8191, logits_loss: 1.8191, aux_loss: 0.0000, lr: 0.00004749, epoch_time: 2.0min
+Epoch:[1/1](130/790), loss: 1.8297, logits_loss: 1.8297, aux_loss: 0.0000, lr: 0.00004706, epoch_time: 2.0min
+Epoch:[1/1](140/790), loss: 1.7653, logits_loss: 1.7653, aux_loss: 0.0000, lr: 0.00004660, epoch_time: 2.0min
+Epoch:[1/1](150/790), loss: 1.7292, logits_loss: 1.7292, aux_loss: 0.0000, lr: 0.00004611, epoch_time: 2.0min
+Epoch:[1/1](160/790), loss: 1.8057, logits_loss: 1.8057, aux_loss: 0.0000, lr: 0.00004560, epoch_time: 2.0min
+Epoch:[1/1](170/790), loss: 1.7507, logits_loss: 1.7507, aux_loss: 0.0000, lr: 0.00004505, epoch_time: 1.0min
+Epoch:[1/1](180/790), loss: 1.7094, logits_loss: 1.7094, aux_loss: 0.0000, lr: 0.00004448, epoch_time: 1.0min
+Epoch:[1/1](190/790), loss: 1.8386, logits_loss: 1.8386, aux_loss: 0.0000, lr: 0.00004388, epoch_time: 1.0min
+Epoch:[1/1](200/790), loss: 1.8187, logits_loss: 1.8187, aux_loss: 0.0000, lr: 0.00004325, epoch_time: 1.0min
+Epoch:[1/1](210/790), loss: 1.7151, logits_loss: 1.7151, aux_loss: 0.0000, lr: 0.00004260, epoch_time: 1.0min
+Epoch:[1/1](220/790), loss: 1.7765, logits_loss: 1.7765, aux_loss: 0.0000, lr: 0.00004192, epoch_time: 1.0min
+Epoch:[1/1](230/790), loss: 1.7271, logits_loss: 1.7271, aux_loss: 0.0000, lr: 0.00004123, epoch_time: 1.0min
+Epoch:[1/1](240/790), loss: 1.7466, logits_loss: 1.7466, aux_loss: 0.0000, lr: 0.00004051, epoch_time: 1.0min
+Epoch:[1/1](250/790), loss: 1.6347, logits_loss: 1.6347, aux_loss: 0.0000, lr: 0.00003977, epoch_time: 1.0min
+Epoch:[1/1](260/790), loss: 1.7381, logits_loss: 1.7381, aux_loss: 0.0000, lr: 0.00003901, epoch_time: 1.0min
+Epoch:[1/1](270/790), loss: 1.6708, logits_loss: 1.6708, aux_loss: 0.0000, lr: 0.00003823, epoch_time: 1.0min
+Epoch:[1/1](280/790), loss: 1.6921, logits_loss: 1.6921, aux_loss: 0.0000, lr: 0.00003743, epoch_time: 1.0min
+Epoch:[1/1](290/790), loss: 1.7573, logits_loss: 1.7573, aux_loss: 0.0000, lr: 0.00003662, epoch_time: 1.0min
+Epoch:[1/1](300/790), loss: 1.6766, logits_loss: 1.6766, aux_loss: 0.0000, lr: 0.00003580, epoch_time: 1.0min
+Epoch:[1/1](310/790), loss: 1.7378, logits_loss: 1.7378, aux_loss: 0.0000, lr: 0.00003496, epoch_time: 1.0min
+Epoch:[1/1](320/790), loss: 1.7714, logits_loss: 1.7714, aux_loss: 0.0000, lr: 0.00003411, epoch_time: 1.0min
+Epoch:[1/1](330/790), loss: 1.7158, logits_loss: 1.7158, aux_loss: 0.0000, lr: 0.00003325, epoch_time: 1.0min
+Epoch:[1/1](340/790), loss: 1.7114, logits_loss: 1.7114, aux_loss: 0.0000, lr: 0.00003238, epoch_time: 1.0min
+Epoch:[1/1](350/790), loss: 1.7782, logits_loss: 1.7782, aux_loss: 0.0000, lr: 0.00003150, epoch_time: 1.0min
+Epoch:[1/1](360/790), loss: 1.7760, logits_loss: 1.7760, aux_loss: 0.0000, lr: 0.00003062, epoch_time: 1.0min
+Epoch:[1/1](370/790), loss: 1.7573, logits_loss: 1.7573, aux_loss: 0.0000, lr: 0.00002973, epoch_time: 1.0min
+Epoch:[1/1](380/790), loss: 1.7077, logits_loss: 1.7077, aux_loss: 0.0000, lr: 0.00002884, epoch_time: 1.0min
+Epoch:[1/1](390/790), loss: 1.7084, logits_loss: 1.7084, aux_loss: 0.0000, lr: 0.00002795, epoch_time: 1.0min
+Epoch:[1/1](400/790), loss: 1.7338, logits_loss: 1.7338, aux_loss: 0.0000, lr: 0.00002705, epoch_time: 1.0min
+Epoch:[1/1](410/790), loss: 1.7803, logits_loss: 1.7803, aux_loss: 0.0000, lr: 0.00002616, epoch_time: 1.0min
+Epoch:[1/1](420/790), loss: 1.7943, logits_loss: 1.7943, aux_loss: 0.0000, lr: 0.00002527, epoch_time: 1.0min
+Epoch:[1/1](430/790), loss: 1.6940, logits_loss: 1.6940, aux_loss: 0.0000, lr: 0.00002438, epoch_time: 1.0min
+Epoch:[1/1](440/790), loss: 1.8222, logits_loss: 1.8222, aux_loss: 0.0000, lr: 0.00002350, epoch_time: 1.0min
+Epoch:[1/1](450/790), loss: 1.6714, logits_loss: 1.6714, aux_loss: 0.0000, lr: 0.00002262, epoch_time: 1.0min
+Epoch:[1/1](460/790), loss: 1.8071, logits_loss: 1.8071, aux_loss: 0.0000, lr: 0.00002175, epoch_time: 1.0min
+Epoch:[1/1](470/790), loss: 1.7019, logits_loss: 1.7019, aux_loss: 0.0000, lr: 0.00002089, epoch_time: 1.0min
+Epoch:[1/1](480/790), loss: 1.8179, logits_loss: 1.8179, aux_loss: 0.0000, lr: 0.00002004, epoch_time: 0.0min
+Epoch:[1/1](490/790), loss: 1.6772, logits_loss: 1.6772, aux_loss: 0.0000, lr: 0.00001920, epoch_time: 0.0min
+Epoch:[1/1](500/790), loss: 1.6859, logits_loss: 1.6859, aux_loss: 0.0000, lr: 0.00001838, epoch_time: 0.0min
+Epoch:[1/1](510/790), loss: 1.7314, logits_loss: 1.7314, aux_loss: 0.0000, lr: 0.00001757, epoch_time: 0.0min
+Epoch:[1/1](520/790), loss: 1.7081, logits_loss: 1.7081, aux_loss: 0.0000, lr: 0.00001677, epoch_time: 0.0min
+Epoch:[1/1](530/790), loss: 1.7466, logits_loss: 1.7466, aux_loss: 0.0000, lr: 0.00001599, epoch_time: 0.0min
+Epoch:[1/1](540/790), loss: 1.6532, logits_loss: 1.6532, aux_loss: 0.0000, lr: 0.00001523, epoch_time: 0.0min
+Epoch:[1/1](550/790), loss: 1.7244, logits_loss: 1.7244, aux_loss: 0.0000, lr: 0.00001449, epoch_time: 0.0min
+Epoch:[1/1](560/790), loss: 1.7499, logits_loss: 1.7499, aux_loss: 0.0000, lr: 0.00001377, epoch_time: 0.0min
+Epoch:[1/1](570/790), loss: 1.7918, logits_loss: 1.7918, aux_loss: 0.0000, lr: 0.00001308, epoch_time: 0.0min
+Epoch:[1/1](580/790), loss: 1.7295, logits_loss: 1.7295, aux_loss: 0.0000, lr: 0.00001240, epoch_time: 0.0min
+Epoch:[1/1](590/790), loss: 1.8010, logits_loss: 1.8010, aux_loss: 0.0000, lr: 0.00001175, epoch_time: 0.0min
+Epoch:[1/1](600/790), loss: 1.7417, logits_loss: 1.7417, aux_loss: 0.0000, lr: 0.00001112, epoch_time: 0.0min
+Epoch:[1/1](610/790), loss: 1.7423, logits_loss: 1.7423, aux_loss: 0.0000, lr: 0.00001052, epoch_time: 0.0min
+Epoch:[1/1](620/790), loss: 1.7467, logits_loss: 1.7467, aux_loss: 0.0000, lr: 0.00000995, epoch_time: 0.0min
+Epoch:[1/1](630/790), loss: 1.6859, logits_loss: 1.6859, aux_loss: 0.0000, lr: 0.00000940, epoch_time: 0.0min
+Epoch:[1/1](640/790), loss: 1.7193, logits_loss: 1.7193, aux_loss: 0.0000, lr: 0.00000889, epoch_time: 0.0min
+Epoch:[1/1](650/790), loss: 1.8272, logits_loss: 1.8272, aux_loss: 0.0000, lr: 0.00000840, epoch_time: 0.0min
+Epoch:[1/1](660/790), loss: 1.7661, logits_loss: 1.7661, aux_loss: 0.0000, lr: 0.00000794, epoch_time: 0.0min
+Epoch:[1/1](670/790), loss: 1.7171, logits_loss: 1.7171, aux_loss: 0.0000, lr: 0.00000751, epoch_time: 0.0min
+Epoch:[1/1](680/790), loss: 1.8028, logits_loss: 1.8028, aux_loss: 0.0000, lr: 0.00000712, epoch_time: 0.0min
+Epoch:[1/1](690/790), loss: 1.6675, logits_loss: 1.6675, aux_loss: 0.0000, lr: 0.00000676, epoch_time: 0.0min
+Epoch:[1/1](700/790), loss: 1.7549, logits_loss: 1.7549, aux_loss: 0.0000, lr: 0.00000643, epoch_time: 0.0min
+Epoch:[1/1](710/790), loss: 1.7573, logits_loss: 1.7573, aux_loss: 0.0000, lr: 0.00000613, epoch_time: 0.0min
+Epoch:[1/1](720/790), loss: 1.7311, logits_loss: 1.7311, aux_loss: 0.0000, lr: 0.00000587, epoch_time: 0.0min
+Epoch:[1/1](730/790), loss: 1.7909, logits_loss: 1.7909, aux_loss: 0.0000, lr: 0.00000564, epoch_time: 0.0min
+Epoch:[1/1](740/790), loss: 1.7221, logits_loss: 1.7221, aux_loss: 0.0000, lr: 0.00000544, epoch_time: 0.0min
+Epoch:[1/1](750/790), loss: 1.7721, logits_loss: 1.7721, aux_loss: 0.0000, lr: 0.00000528, epoch_time: 0.0min
+Epoch:[1/1](760/790), loss: 1.7198, logits_loss: 1.7198, aux_loss: 0.0000, lr: 0.00000516, epoch_time: 0.0min
+Epoch:[1/1](770/790), loss: 1.7477, logits_loss: 1.7477, aux_loss: 0.0000, lr: 0.00000507, epoch_time: 0.0min
+Epoch:[1/1](780/790), loss: 1.7436, logits_loss: 1.7436, aux_loss: 0.0000, lr: 0.00000502, epoch_time: 0.0min
+Epoch:[1/1](790/790), loss: 1.6331, logits_loss: 1.6331, aux_loss: 0.0000, lr: 0.00000500, epoch_time: 0.0min

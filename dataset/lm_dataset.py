@@ -221,6 +221,8 @@ class RLAIFDataset(Dataset):
         return len(self.samples)
 
     def create_chat_prompt(self, conversations):
+        if not conversations:
+            raise ValueError("RLAIFDataset expects a non-empty 'conversations' field.")
         conversations = pre_processing_chat(conversations)
         use_thinking = random.random() < self.thinking_ratio
         return self.tokenizer.apply_chat_template(
@@ -231,6 +233,8 @@ class RLAIFDataset(Dataset):
         )
     def __getitem__(self, index):
         sample = self.samples[index]
+        if 'conversations' not in sample:
+            raise KeyError("RLAIFDataset sample must contain a 'conversations' field.")
         prompt = self.create_chat_prompt(sample['conversations'])
 
         return {

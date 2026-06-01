@@ -9,21 +9,74 @@ from model.model_lora import *
 from trainer.trainer_utils import setup_seed, get_model_params
 warnings.filterwarnings('ignore')
 
+def load_checkpoint_state_dict(ckp, device):
+    checkpoint = torch.load(ckp, map_location=device)
+    if isinstance(checkpoint, dict):
+        for key in ("model", "model_state_dict", "state_dict"):
+            if key in checkpoint and isinstance(checkpoint[key], dict):
+                checkpoint = checkpoint[key]
+                break
+    if not isinstance(checkpoint, dict):
+        raise TypeError(f"Checkpoint at {ckp} is not a state_dict-compatible dict.")
+    return {
+        (k[7:] if k.startswith("module.") else k): v
+        for k, v in checkpoint.items()
+    }
+
+def infer_arch_from_state_dict(state_dict):
+    use_residual_scale = any(
+        ("attn_res_scale" in k or "mlp_res_scale" in k)
+        for k in state_dict.keys()
+    )
+
+    mtp_depth = 0
+    for k in state_dict.keys():
+        if k.startswith("mtp_heads."):
+            parts = k.split(".")
+            if len(parts) > 1:
+                try:
+                    idx = int(parts[1])
+                    mtp_depth = max(mtp_depth, idx + 1)
+                except ValueError:
+                    pass
+
+    return use_residual_scale, mtp_depth
+
+def resolve_checkpoint_path(args):
+    if args.checkpoint_path is not None:
+        return args.checkpoint_path
+    moe_suffix = '_moe' if args.use_moe else ''
+    return f'./{args.save_dir}/{args.weight}_{args.hidden_size}{moe_suffix}.pth'
+
 def init_model(args):
     tokenizer = AutoTokenizer.from_pretrained(args.load_from)
     if 'model' in args.load_from:
+        ckp = resolve_checkpoint_path(args)
+        state_dict = load_checkpoint_state_dict(ckp, args.device)
+        if args.auto_arch:
+            auto_use_residual_scale, auto_mtp_depth = infer_arch_from_state_dict(state_dict)
+            args.use_residual_scale = int(auto_use_residual_scale)
+            args.mtp_depth = auto_mtp_depth
+            print(f"[auto_arch] use_residual_scale={args.use_residual_scale}, mtp_depth={args.mtp_depth}")
         model = DipSeekForCausalLM(DipSeekConfig(
             hidden_size=args.hidden_size,
             num_hidden_layers=args.num_hidden_layers,
             use_moe=bool(args.use_moe),
-            inference_rope_scaling=args.inference_rope_scaling
+            inference_rope_scaling=args.inference_rope_scaling,
+            use_residual_scale=bool(args.use_residual_scale),
+            residual_scale_init=args.residual_scale_init,
+            mtp_depth=args.mtp_depth,
+            mtp_loss_weight=args.mtp_loss_weight,
         ))
-        moe_suffix = '_moe' if args.use_moe else ''
-        ckp = f'./{args.save_dir}/{args.weight}_{args.hidden_size}{moe_suffix}.pth'
-        model.load_state_dict(torch.load(ckp, map_location=args.device), strict=True)
+        missing, unexpected = model.load_state_dict(state_dict, strict=bool(args.strict_load))
+        if missing:
+            print(f"[load warning] missing keys count={len(missing)}, examples={missing[:20]}")
+        if unexpected:
+            print(f"[load warning] unexpected keys count={len(unexpected)}, examples={unexpected[:20]}")
         if args.lora_weight != 'None':
             apply_lora(model)
-            load_lora(model, f'./{args.save_dir}/{args.lora_weight}_{args.hidden_size}.pth')
+            lora_dir = args.lora_dir if args.lora_dir is not None else args.save_dir
+            load_lora(model, f'./{lora_dir}/{args.lora_weight}_{args.hidden_size}.pth')
     else:
         model = AutoModelForCausalLM.from_pretrained(args.load_from, trust_remote_code=True)
     get_model_params(model, model.config)
@@ -35,9 +88,17 @@ def main():
     parser.add_argument('--save_dir', default='out', type=str, help="模型权重目录")
     parser.add_argument('--weight', default='full_sft', type=str, help="权重名称前缀（pretrain, full_sft, rlhf, reason, ppo_actor, grpo, spo）")
     parser.add_argument('--lora_weight', default='None', type=str, help="LoRA权重名称（None表示不使用，可选：lora_identity, lora_medical）")
+    parser.add_argument('--lora_dir', default=None, type=str, help="LoRA权重目录，None时使用save_dir")
+    parser.add_argument('--checkpoint_path', default=None, type=str, help="完整checkpoint路径，提供后优先使用它")
     parser.add_argument('--hidden_size', default=768, type=int, help="隐藏层维度")
     parser.add_argument('--num_hidden_layers', default=8, type=int, help="隐藏层数量")
     parser.add_argument('--use_moe', default=0, type=int, choices=[0, 1], help="是否使用MoE架构（0=否，1=是）")
+    parser.add_argument('--use_residual_scale', default=0, type=int, choices=[0, 1], help="是否启用Residual Scale结构")
+    parser.add_argument('--residual_scale_init', default=1.0, type=float, help="Residual Scale初始值")
+    parser.add_argument('--mtp_depth', default=0, type=int, help="MTP-lite深度，0表示关闭")
+    parser.add_argument('--mtp_loss_weight', default=0.0, type=float, help="MTP-lite loss权重，推理时通常为0")
+    parser.add_argument('--strict_load', default=1, type=int, choices=[0, 1], help="是否严格加载checkpoint")
+    parser.add_argument('--auto_arch', default=1, type=int, choices=[0, 1], help="是否从checkpoint key自动推断residual_scale和mtp_depth")
     parser.add_argument('--inference_rope_scaling', default=False, action='store_true', help="启用RoPE位置编码外推（4倍，仅解决位置编码问题）")
     parser.add_argument('--max_new_tokens', default=8192, type=int, help="最大生成长度（注意：并非模型实际长文本能力）")
     parser.add_argument('--temperature', default=0.85, type=float, help="生成温度，控制随机性（0-1，越大越随机）")

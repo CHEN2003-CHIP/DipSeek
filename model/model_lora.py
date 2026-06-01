@@ -104,6 +104,8 @@ def load_lora(model, path, strict=True):
 
         module.lora.load_state_dict(lora_state, strict=True)
 
+    print(f"[lora] loaded lora_weight, lora_dir={path}")
+
     return model
 
 

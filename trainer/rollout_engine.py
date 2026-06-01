@@ -52,7 +52,8 @@ class RolloutEngine(ABC):
     tokenizer = None
     
     @abstractmethod
-    def rollout(self, prompt_ids: Tensor, attention_mask: Tensor, num_generations: int, max_new_tokens: int, temperature: float = 0.8) -> RolloutResult:
+    def rollout(self, prompt_ids: Tensor, attention_mask: Tensor, num_generations: int, max_new_tokens: int,
+                temperature: float = 0.8, top_p: float = 0.9, top_k: int = 50, do_sample: bool = True) -> RolloutResult:
         pass
     
     @abstractmethod
@@ -68,16 +69,21 @@ class TorchRolloutEngine(RolloutEngine):
         self.device = device
         self.autocast_ctx = autocast_ctx
     
-    def rollout(self, prompt_ids: Tensor, attention_mask: Tensor, num_generations: int, max_new_tokens: int, temperature: float = 0.8) -> RolloutResult:
+    def rollout(self, prompt_ids: Tensor, attention_mask: Tensor, num_generations: int, max_new_tokens: int,
+                temperature: float = 0.8, top_p: float = 0.9, top_k: int = 50, do_sample: bool = True) -> RolloutResult:
         model = self.policy_model.module if isinstance(self.policy_model, DistributedDataParallel) else self.policy_model
         ctx = self.autocast_ctx if self.autocast_ctx else nullcontext()
+        was_training = model.training
+        model.eval()
         with torch.no_grad(), ctx:
             output_ids = model.generate(
                 input_ids=prompt_ids.repeat_interleave(num_generations, dim=0),
                 attention_mask=attention_mask.repeat_interleave(num_generations, dim=0),
                 max_new_tokens=max_new_tokens,
-                do_sample=True,
+                do_sample=do_sample,
                 temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
                 num_return_sequences=1,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
@@ -85,11 +91,14 @@ class TorchRolloutEngine(RolloutEngine):
             prompt_len = prompt_ids.size(1)
             completion_ids = output_ids[:, prompt_len:]  # [B*num_gen, R]
             full_mask = (output_ids != self.tokenizer.pad_token_id).long()
-            per_token_logps = compute_per_token_logps(self.policy_model, output_ids, completion_ids.size(1), attention_mask=full_mask)
+            per_token_logps = compute_per_token_logps(self.policy_model, output_ids, completion_ids.size(1), attention_mask=full_mask).detach()
+        if was_training:
+            model.train()
         completions = self.tokenizer.batch_decode(completion_ids, skip_special_tokens=True)
+        completion_mask = (completion_ids != self.tokenizer.pad_token_id).long()
         return RolloutResult(output_ids, completion_ids, per_token_logps, completions,
                              prompt_ids.new_full((output_ids.size(0),), prompt_len),
-                             attention_mask.new_ones(output_ids.size(0), completion_ids.size(1)))
+                             completion_mask)
     
     def update_policy(self, model: torch.nn.Module):
         self.policy_model = model
@@ -104,7 +113,8 @@ class SGLangRolloutEngine(RolloutEngine):
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         self.http = requests
     
-    def rollout(self, prompt_ids: Tensor, attention_mask: Tensor, num_generations: int, max_new_tokens: int, temperature: float = 0.8) -> RolloutResult:
+    def rollout(self, prompt_ids: Tensor, attention_mask: Tensor, num_generations: int, max_new_tokens: int,
+                temperature: float = 0.8, top_p: float = 0.9, top_k: int = 50, do_sample: bool = True) -> RolloutResult:
         # 去除左侧 padding tokens，只保留有效 token
         input_ids_list = []
         for ids, mask in zip(prompt_ids, attention_mask):
@@ -116,6 +126,8 @@ class SGLangRolloutEngine(RolloutEngine):
             "input_ids": all_input_ids,
             "sampling_params": {
                 "temperature": temperature,
+                "top_p": top_p,
+                "top_k": top_k,
                 "max_new_tokens": max_new_tokens,
                 "stop_token_ids": [self.tokenizer.eos_token_id] if self.tokenizer.eos_token_id else [],
             },

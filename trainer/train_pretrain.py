@@ -28,6 +28,17 @@ def train_epoch(epoch, loader, iters, start_step=0, wandb=None):
         input_ids = input_ids.to(args.device)
         labels = labels.to(args.device)
         last_step = step
+        raw_model = model.module if isinstance(model, DistributedDataParallel) else model
+        raw_model = getattr(raw_model, '_orig_mod', raw_model)
+        if args.mtp_depth > 0 and args.base_mtp_loss_weight > 0:
+            total_steps = max(args.epochs * iters, 1)
+            warmup_steps = max(int(total_steps * args.mtp_loss_warmup_ratio), 1)
+            global_step = epoch * iters + step
+            mtp_weight = args.base_mtp_loss_weight * min(1.0, global_step / warmup_steps)
+        else:
+            mtp_weight = 0.0
+        raw_model.config.mtp_loss_weight = mtp_weight
+
         lr = get_lr(epoch * iters + step, args.epochs * iters, args.learning_rate)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
@@ -52,11 +63,23 @@ def train_epoch(epoch, loader, iters, start_step=0, wandb=None):
             spend_time = time.time() - start_time
             current_loss = loss.item() * args.accumulation_steps
             current_aux_loss = res.aux_loss.item() if res.aux_loss is not None else 0.0
-            current_logits_loss = current_loss - current_aux_loss
+            current_main_loss = res.main_loss.item() if getattr(res, 'main_loss', None) is not None else current_loss - current_aux_loss
+            current_mtp_loss = res.mtp_loss.item() if getattr(res, 'mtp_loss', None) is not None else 0.0
+            current_mtp_weighted_loss = res.mtp_weighted_loss.item() if getattr(res, 'mtp_weighted_loss', None) is not None else 0.0
             current_lr = optimizer.param_groups[-1]['lr']
             eta_min = spend_time / max(step - start_step, 1) * (iters - step) // 60
-            Logger(f'Epoch:[{epoch + 1}/{args.epochs}]({step}/{iters}), loss: {current_loss:.4f}, logits_loss: {current_logits_loss:.4f}, aux_loss: {current_aux_loss:.4f}, lr: {current_lr:.8f}, epoch_time: {eta_min:.1f}min')
-            if wandb: wandb.log({"loss": current_loss, "logits_loss": current_logits_loss, "aux_loss": current_aux_loss, "learning_rate": current_lr, "epoch_time": eta_min})
+            Logger(f'Epoch:[{epoch + 1}/{args.epochs}]({step}/{iters}), loss: {current_loss:.4f}, main_loss: {current_main_loss:.4f}, mtp_loss: {current_mtp_loss:.4f}, mtp_weight: {mtp_weight:.4f}, mtp_weighted: {current_mtp_weighted_loss:.4f}, aux_loss: {current_aux_loss:.4f}, lr: {current_lr:.8f}, epoch_time: {eta_min:.1f}min')
+            if wandb:
+                wandb.log({
+                    "loss": current_loss,
+                    "main_loss": current_main_loss,
+                    "mtp_loss": current_mtp_loss,
+                    "mtp_weight": mtp_weight,
+                    "mtp_weighted_loss": current_mtp_weighted_loss,
+                    "aux_loss": current_aux_loss,
+                    "learning_rate": current_lr,
+                    "epoch_time": eta_min
+                })
 
         if (step % args.save_interval == 0 or step == iters) and is_main_process():
             model.eval()
@@ -106,6 +129,9 @@ if __name__ == "__main__":
     
     parser.add_argument('--mtp_depth', default=0, type=int, help="MTP-lite深度，0=关闭，1=额外预测t+2")
     parser.add_argument('--mtp_loss_weight', default=0.0, type=float, help="MTP-lite loss权重，建议0.05或0.1")
+    parser.add_argument('--mtp_loss_warmup_ratio', default=0.05, type=float, help="MTP-lite loss权重warmup比例")
+    parser.add_argument('--mtp_detach_lm_head', default=1, type=int, choices=[0, 1], help="MTP-lite是否阻止辅助loss更新lm_head")
+    parser.add_argument('--mtp_adapter_init', default=0.0, type=float, help="MTP-lite residual adapter gate初始值")
     
     parser.add_argument('--use_residual_scale', default=0, type=int, choices=[0, 1], help="是否启用Residual Scale（0=否，1=是）")
     parser.add_argument('--residual_scale_init', default=1.0, type=float, help="Residual Scale初始值")
@@ -116,6 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_project", type=str, default="DipSeek-Pretrain", help="wandb项目名")
     parser.add_argument("--use_compile", default=0, type=int, choices=[0, 1], help="是否使用torch.compile加速（0=否，1=是）")
     args = parser.parse_args()
+    args.base_mtp_loss_weight = args.mtp_loss_weight
 
     # ========== 1. 初始化环境和随机种子 ==========
     local_rank = init_distributed_mode()
@@ -130,7 +157,9 @@ if __name__ == "__main__":
                                use_residual_scale=bool(args.use_residual_scale),
                                residual_scale_init=args.residual_scale_init,
                                mtp_depth=args.mtp_depth,
-                               mtp_loss_weight=args.mtp_loss_weight)
+                               mtp_loss_weight=args.mtp_loss_weight,
+                               mtp_detach_lm_head=bool(args.mtp_detach_lm_head),
+                               mtp_adapter_init=args.mtp_adapter_init)
     ckp_data = lm_checkpoint(lm_config, weight=args.save_weight, save_dir='../checkpoints') if args.from_resume==1 else None
     
     # ========== 3. 设置混合精度 ==========

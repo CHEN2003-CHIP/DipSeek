@@ -47,6 +47,8 @@ class DipSeekConfig(PretrainedConfig):
         # mtp_depth=1: 额外预测一个未来 token，也就是 t+2
         self.mtp_depth = kwargs.get("mtp_depth", 0)
         self.mtp_loss_weight = kwargs.get("mtp_loss_weight", 0.0)
+        self.mtp_detach_lm_head = kwargs.get("mtp_detach_lm_head", True)
+        self.mtp_adapter_init = kwargs.get("mtp_adapter_init", 0.0)
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-5):
@@ -284,9 +286,10 @@ class MTPLiteHead(nn.Module):
         super().__init__()
         self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.proj = nn.Linear(config.hidden_size, config.hidden_size, bias=False)
+        self.gate = nn.Parameter(torch.full((1,), float(config.mtp_adapter_init)))
 
     def forward(self, hidden_states):
-        return self.proj(self.norm(hidden_states))
+        return hidden_states + self.gate.to(hidden_states.dtype) * self.proj(self.norm(hidden_states))
 
 class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
     config_class = DipSeekConfig
@@ -341,9 +344,15 @@ class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
                     continue
 
                 mtp_hidden = mtp_head(hidden_states[:, :-offset, :])
-                mtp_logits = self.lm_head(mtp_hidden)
-
                 mtp_labels = labels[:, offset:].contiguous()
+                valid_tokens = mtp_labels.ne(-100).sum()
+                if valid_tokens.item() == 0:
+                    continue
+
+                if self.config.mtp_detach_lm_head:
+                    mtp_logits = F.linear(mtp_hidden, self.lm_head.weight.detach())
+                else:
+                    mtp_logits = self.lm_head(mtp_hidden)
 
                 mtp_loss = F.cross_entropy(
                     mtp_logits.reshape(-1, vocab_size),
@@ -362,9 +371,16 @@ class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
         slice_indices = slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
         logits = self.lm_head(hidden_states[:, slice_indices, :])
         loss = None
+        main_loss = None
+        mtp_loss = hidden_states.new_zeros(())
+        mtp_weighted_loss = hidden_states.new_zeros(())
         if labels is not None:
             x, y = logits[..., :-1, :].contiguous(), labels[..., 1:].contiguous()
-            loss = F.cross_entropy(x.view(-1, x.size(-1)), y.view(-1), ignore_index=-100)
+            if y.ne(-100).sum().item() == 0:
+                main_loss = hidden_states.new_zeros(())
+            else:
+                main_loss = F.cross_entropy(x.view(-1, x.size(-1)), y.view(-1), ignore_index=-100)
+            loss = main_loss
             # MTP-lite:
             # 只在训练时启用，eval / generate 不启用
             # 这样验证 loss 仍然是干净的 next-token loss
@@ -376,8 +392,13 @@ class DipSeekForCausalLM(PreTrainedModel, GenerationMixin):
                 and logits_to_keep == 0
             ):
                 mtp_loss = self._compute_mtp_loss(hidden_states, labels)
-                loss = loss + self.config.mtp_loss_weight * mtp_loss
-        return MoeCausalLMOutputWithPast(loss=loss, aux_loss=aux_loss, logits=logits, past_key_values=past_key_values, hidden_states=hidden_states)
+                mtp_weighted_loss = self.config.mtp_loss_weight * mtp_loss
+                loss = loss + mtp_weighted_loss
+        output = MoeCausalLMOutputWithPast(loss=loss, aux_loss=aux_loss, logits=logits, past_key_values=past_key_values, hidden_states=hidden_states)
+        output.main_loss = main_loss
+        output.mtp_loss = mtp_loss
+        output.mtp_weighted_loss = mtp_weighted_loss
+        return output
     
     # Custom generation loop preserved from the upstream implementation.
     @torch.inference_mode()

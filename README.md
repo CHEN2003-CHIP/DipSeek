@@ -227,7 +227,10 @@ python -u train_pretrain.py \
   --num_hidden_layers 8 \
   --use_residual_scale 1 \
   --mtp_depth 1 \
-  --mtp_loss_weight 0.2 \
+  --mtp_loss_weight 0.1 \
+  --mtp_loss_warmup_ratio 0.05 \
+  --mtp_detach_lm_head 1 \
+  --mtp_adapter_init 0.0 \
   --dtype float16 \
   > ../runs/logs/dipseek_pretrain_mtp_lite_bs32_acc1.log 2>&1
 ```
@@ -451,4 +454,3 @@ python eval_llm.py \
 ## 📄 License
 
 本项目用于学习、实验和教学展示。请根据你实际采用的上游项目许可证补充本仓库 License。
-
